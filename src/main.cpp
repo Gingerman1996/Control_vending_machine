@@ -68,20 +68,21 @@ void setup()
   // Set callback function for MQTTDataParser
     MQTTDataParser::getInstance()->setCallback(dataCallback);
 
-  xTaskCreatePinnedToCore(mqttLoop, "MQTT_LOOP", 2048, NULL, 1, &MQTT_loop_task, 0);
+  // xTaskCreatePinnedToCore(mqttLoop, "MQTT_LOOP", 2048, NULL, 1, &MQTT_loop_task, 0);
 }
 
 void loop()
 {
+  MQTTManager::getInstance()->loop();
 }
 
 void mqttLoop(void *pvvalue)
 {
-  while (1)
-  {
-    MQTTManager::getInstance()->loop();
-    vTaskDelay(xDelay100ms);
-  }
+  // while (1)
+  // {
+  //   MQTTManager::getInstance()->loop();
+  //   vTaskDelay(xDelay100ms);
+  // }
 }
 
 // For mqttDataParser
@@ -94,7 +95,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
 // Function to handle pump1 data
 void handlePump1(const char *value)
 {
-  Serial.printf("Pump1 value: %d", value);
+  Serial.printf("Pump1 value: %s\n", value);
 }
 
 // Function to handle pump2 data
