@@ -19,5 +19,6 @@
 
 const TickType_t xDelay100ms = pdMS_TO_TICKS(100);
 TaskHandle_t MQTT_loop_task = NULL;
+TaskHandle_t Data_Task = NULL;
 
 #endif

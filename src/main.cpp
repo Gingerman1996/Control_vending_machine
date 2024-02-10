@@ -4,37 +4,39 @@
 
 void mqttCallback(char *topic, byte *payload, unsigned int length);
 void mqttLoop(void *pvvalue);
+void PumpWork(void *parameter);
 
-// Function to handle pump1 data
-void handlePump1(const char *value);
-// Function to handle pump2 data
-void handlePump2(const char *value);
+struct dataPump
+{
+  String msg;
+  int value;
+};
+
+// Function to handle pump data
+void handlePump(String msg, int value);
 // Function to handle swap data
-void handleSwap(const char *value);
+void handleSwap(int value);
 // Function to handle calibration data
-void handleCalibration(const char *value);
+void handleCalibration(int value);
 
 // Callback function for handling data
-void dataCallback(const char* msg, const char *value)
+void dataCallback(String msg, int value)
 {
-  String msg_str = String(msg);
   // Perform actions based on the received message
-  if (msg_str == "pump1")
+  if (msg == "pump1" || msg == "pump2")
   {
-    // Call function to handle pump1 data
-    handlePump1(value);
+    // Create task to work pump
+    dataPump *datapump = new dataPump;                                                 // สร้างข้อมูลใหม่
+    datapump->msg = msg;                                                               // กำหนดข้อมูล
+    datapump->value = value;                                                           // กำหนดข้อมูล
+    xTaskCreatePinnedToCore(PumpWork, "PumpTask", 4026, (void *)datapump, 1, NULL, 0); // ส่ง pointer ไปยัง task
   }
-  else if (msg_str == "pump2")
-  {
-    // Call function to handle pump2 data
-    handlePump2(value);
-  }
-  else if (msg_str == "swap")
+  else if (msg == "swap")
   {
     // Call function to handle swap data
     handleSwap(value);
   }
-  else if (msg_str == "cal")
+  else if (msg == "cal")
   {
     // Call function to handle calibration data
     handleCalibration(value);
@@ -66,23 +68,35 @@ void setup()
   mqttManager->setMessageCallback(mqttCallback); // Set message callback
 
   // Set callback function for MQTTDataParser
-    MQTTDataParser::getInstance()->setCallback(dataCallback);
+  MQTTDataParser::getInstance()->setCallback(dataCallback);
 
-  // xTaskCreatePinnedToCore(mqttLoop, "MQTT_LOOP", 2048, NULL, 1, &MQTT_loop_task, 0);
+  xTaskCreatePinnedToCore(mqttLoop, "MQTT_LOOP", 8192, NULL, 1, &MQTT_loop_task, 0);
 }
 
 void loop()
 {
-  MQTTManager::getInstance()->loop();
 }
 
+// Task mqtt loop
 void mqttLoop(void *pvvalue)
 {
-  // while (1)
-  // {
-  //   MQTTManager::getInstance()->loop();
-  //   vTaskDelay(xDelay100ms);
-  // }
+  while (1)
+  {
+    MQTTManager::getInstance()->loop();
+    vTaskDelay(xDelay100ms);
+  }
+}
+
+// Task pump work
+void PumpWork(void *parameter)
+{
+  // Retrieve the value passed from dataCallback
+  dataPump datapump = *((dataPump *)parameter);
+
+  // Add your logic here to process the received data...
+
+  // Task finished, delete itself
+  vTaskDelete(NULL);
 }
 
 // For mqttDataParser
@@ -92,26 +106,20 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
   MQTTDataParser::getInstance()->parseData(payload, length);
 }
 
-// Function to handle pump1 data
-void handlePump1(const char *value)
+// Function to handle pump data
+void handlePump(String msg, int value)
 {
-  Serial.printf("Pump1 value: %s\n", value);
-}
-
-// Function to handle pump2 data
-void handlePump2(const char *value)
-{
-  // Add your logic here...
+  Serial.printf("Pump1 value: %d\n", value);
 }
 
 // Function to handle swap data
-void handleSwap(const char *value)
+void handleSwap(int value)
 {
   // Add your logic here...
 }
 
 // Function to handle calibration data
-void handleCalibration(const char *value)
+void handleCalibration(int value)
 {
   // Add your logic here...
 }

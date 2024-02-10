@@ -36,7 +36,7 @@ void MQTTDataParser::parseData(byte *payload, unsigned int length)
         {
             const char *msg_chr = doc["msg"];
             const char *endNode = doc["EndNode"];
-            const char *value = doc["Value"];
+            int value = doc["Value"].as<int>();
             dataCallback(msg_chr, value); // Call the callback function
         }
     }

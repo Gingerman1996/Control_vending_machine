@@ -6,7 +6,7 @@
 #include <string.h>
 
 // Define callback function type
-typedef void (*MQTTDataCallback)(const char*, const char*);
+typedef void (*MQTTDataCallback)(String, int);
 
 class MQTTDataParser
 {
