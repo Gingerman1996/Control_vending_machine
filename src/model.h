@@ -28,6 +28,7 @@ public:
 class MQTTManager
 {
 private:
+#define MQTTpubQos 2
     MQTTManager();
     static MQTTManager *instance;
     PubSubClient *client;

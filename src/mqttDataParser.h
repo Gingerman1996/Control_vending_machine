@@ -1,4 +1,5 @@
-// mqttDataParser.h
+#pragma once
+
 #ifndef MQTT_DATA_PARSER_H
 #define MQTT_DATA_PARSER_H
 
@@ -6,7 +7,31 @@
 #include <string.h>
 
 // Define callback function type
-typedef void (*MQTTDataCallback)(String, int);
+typedef void (*MQTTDataCallback)(StaticJsonDocument<200>);
+
+struct dataPump
+{
+    String msg;
+    int value;
+    float cal_value;
+    int door;
+    int pump_pin;
+    int valve_pin;
+};
+
+struct dataSwap
+{
+    String msg;
+    int box;
+    float value;
+};
+
+struct dataCal
+{
+    String msg;
+    String cal_msg;
+    float value;
+};
 
 class MQTTDataParser
 {

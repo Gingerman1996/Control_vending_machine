@@ -30,14 +30,14 @@ void MQTTDataParser::parseData(byte *payload, unsigned int length)
 
     // Check msg value and parse data accordingly
     // Check msg value and call the appropriate callback function
-    if (msg == "pump1" || msg == "pump2" || msg == "swap" || msg == "cal")
+    if (msg == "pump1" || msg == "pump2" || msg == "Swap" || msg == "Cal")
     {
         if (dataCallback)
         {
             const char *msg_chr = doc["msg"];
             const char *endNode = doc["EndNode"];
             int value = doc["Value"].as<int>();
-            dataCallback(msg_chr, value); // Call the callback function
+            dataCallback(doc); // Call the callback function
         }
     }
     else

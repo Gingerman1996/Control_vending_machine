@@ -70,7 +70,7 @@ void MQTTManager::connect()
     while (!client->connected())
     {
         // Attempt to connect to MQTT broker
-        if (client->connect("ESP32Client", mqttUsername, mqttPassword))
+        if (client->connect("ESP32Client", mqttUsername, mqttPassword, NULL, 2, NULL, NULL))
         {
             Serial.println("Connected!");
             return;
@@ -102,7 +102,7 @@ void MQTTManager::subscribe(const char *topic)
 void MQTTManager::publish(const char *topic, const char *payload)
 {
     // Publish message to MQTT topic
-    client->publish(topic, payload);
+    client->publish(topic, payload, MQTTpubQos);
 }
 
 void MQTTManager::loop()

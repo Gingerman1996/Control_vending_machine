@@ -17,6 +17,15 @@
 // Serial Port
 #define BAUD_RATE 115200
 
+// EEPROM 
+#define EEPROM_SIZE 256
+
+// HX711 pins
+#define LOADCELL_1_DOUT_PIN 5
+#define LOADCELL_1_SCK_PIN 18
+#define LOADCELL_2_DOUT_PIN 19
+#define LOADCELL_2_SCK_PIN 21
+
 const TickType_t xDelay100ms = pdMS_TO_TICKS(100);
 TaskHandle_t MQTT_loop_task = NULL;
 TaskHandle_t Data_Task = NULL;
