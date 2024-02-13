@@ -10,7 +10,10 @@ float zero_factor2;
 
 // Function for mqtt process
 void mqttCallback(char *topic, byte *payload, unsigned int length);
-void mqttLoop(void *pvvalue);
+void mqttLoop(void *parameter);
+
+// NTP client loop
+void NTPloop(void *parameter);
 
 // Function to handle pump data
 void handlePumpData(void *parameter);
@@ -30,7 +33,7 @@ void dataCallback(StaticJsonDocument<200> doc)
     handlepump->msg = doc["msg"].as<String>();  // กำหนดข้อมูล
     handlepump->value = doc["Value"].as<int>(); // กำหนดข้อมูล
     // Create task to work pump
-    xTaskCreatePinnedToCore(handlePumpData, "handlePumpData", 4096, (void *)handlepump, 1, NULL, 0); // ส่ง pointer ไปยัง task
+    xTaskCreatePinnedToCore(handlePumpData, "handlePumpData", 4096, (void *)handlepump, 1, &pump_Task, 0); // ส่ง pointer ไปยัง task
   }
   else if (doc["msg"] == "Swap")
   {
@@ -38,7 +41,7 @@ void dataCallback(StaticJsonDocument<200> doc)
     handleSwap->box = doc["Box"];
     handleSwap->value = doc["Value"];
     // Create task for swap
-    xTaskCreatePinnedToCore(saveSwapData, "saveSwapData", 4096, (void *)handleSwap, 1, NULL, 0);
+    xTaskCreatePinnedToCore(saveSwapData, "saveSwapData", 4096, (void *)handleSwap, 1, &swap_Task, 0);
   }
   else if (doc["msg"] == "Cal")
   {
@@ -47,7 +50,7 @@ void dataCallback(StaticJsonDocument<200> doc)
     handleCal->cal_msg = doc["cal_msg"].as<String>();
     handleCal->value = doc["Value"];
     // // Create task for calibration
-    xTaskCreatePinnedToCore(Calibration, "Calibration", 4096, (void *)handleCal, 1, NULL, 0);
+    xTaskCreatePinnedToCore(Calibration, "Calibration", 4096, (void *)handleCal, 1, &cal_Task, 0);
   }
 }
 
@@ -84,6 +87,10 @@ void setup()
   HX711Reader->setPins1(LOADCELL_1_DOUT_PIN, LOADCELL_1_SCK_PIN);
   HX711Reader->setPins2(LOADCELL_2_DOUT_PIN, LOADCELL_2_SCK_PIN);
 
+  // Initialize NTP server
+  NTPClientWrapper *ntpClient = NTPClientWrapper::getInstance();
+  ntpClient->setup(NTP_SERVER, TIME_OFFSET); // Set NTP Server and Port
+
 // Initializ Loadcell
 #ifdef LOAD_CELL_ACTIVE
   zero_factor1 = HX711Reader->FindZeroFactor(1);
@@ -95,6 +102,7 @@ void setup()
 
   // Create task for mqttloop
   xTaskCreatePinnedToCore(mqttLoop, "MQTT_LOOP", 4096, NULL, 1, &MQTT_loop_task, 0);
+  // xTaskCreatePinnedToCore(NTPloop, "NTPloop", 2048, NULL, 1, &NTP_loop, 0);
 }
 
 void loop()
@@ -102,12 +110,27 @@ void loop()
 }
 
 // Task mqtt loop
-void mqttLoop(void *pvvalue)
+void mqttLoop(void *parameter)
 {
   while (1)
   {
     MQTTManager::getInstance()->loop();
     vTaskDelay(xDelay100ms);
+  }
+}
+
+// NTP client loop
+void NTPloop(void *parameter)
+{
+  while (1)
+  {
+    NTPClientWrapper *ntpClient = NTPClientWrapper::getInstance();
+    ntpClient->update();
+    String time = ntpClient->getFormattedTime();
+    unsigned long time_long = ntpClient->getEpochTime();
+    Serial.printf("TIME: %s\n", time);
+    Serial.printf("EPOCH: %lu\n", time_long);
+    vTaskDelay(xDelay1000ms);
   }
 }
 

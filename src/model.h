@@ -5,6 +5,8 @@
 
 #include <WiFiManager.h>
 #include <PubSubClient.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
 #include "mqttDataParser.h"
 
 class myWiFiManager
@@ -48,6 +50,24 @@ public:
     void loop();
     void setMQTTTimeout(unsigned long timeout);
     void setMessageCallback(void (*callback)(char *, byte *, unsigned int));
+};
+
+class NTPClientWrapper
+{
+private:
+    static NTPClientWrapper *instance; // Static instance variable
+    WiFiUDP *udp;                      // UDP instance
+    NTPClient *ntpClient;              // NTPClient instance
+    const char *ntpServer;
+
+    NTPClientWrapper() {}
+
+public:
+    static NTPClientWrapper *getInstance();         // Get instance method
+    void setup(const char *server, int timeOffset); // Setup method
+    void update();                                  // Update method
+    unsigned long getEpochTime();                   // Get epoch time method
+    String getFormattedTime();                      // Get Fromatted time method
 };
 
 #endif

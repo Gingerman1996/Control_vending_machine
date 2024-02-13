@@ -134,3 +134,46 @@ void MQTTManager::setMessageCallback(void (*callback)(char *, byte *, unsigned i
 {
     client->setCallback(callback);
 }
+
+// NTP Clieant
+NTPClientWrapper *NTPClientWrapper::instance = nullptr;
+
+NTPClientWrapper *NTPClientWrapper::getInstance()
+{
+    if (!instance)
+    {
+        instance = new NTPClientWrapper();
+    }
+    return instance;
+}
+
+void NTPClientWrapper::setup(const char *server, int timeOffset)
+{
+    // Initialize UDP and NTPClient instances
+    int offset = timeOffset * 3600;
+    udp = new WiFiUDP();
+    ntpClient = new NTPClient(*udp, server);
+
+    ntpServer = server;
+
+    // Begin NTPClient
+    ntpClient->begin();
+    ntpClient->setTimeOffset(offset);
+}
+
+void NTPClientWrapper::update()
+{
+    // Update NTPClient
+    ntpClient->update();
+}
+
+unsigned long NTPClientWrapper::getEpochTime()
+{
+    // Get epoch time from NTPClient
+    return ntpClient->getEpochTime();
+}
+
+String NTPClientWrapper::getFormattedTime()
+{
+    return ntpClient->getFormattedTime();
+}
