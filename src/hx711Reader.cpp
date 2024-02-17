@@ -39,13 +39,21 @@ void hx711Reader::setPins2(int doutPin, int sckPin)
 }
 
 // Read data from the HX711 sensor
-float hx711Reader::readData(int module, long offset)
+float hx711Reader::readData(int cell, long offset, float calibrationFactor)
 {
-    
+    if (cell == 1)
+    {
+        hx711_1.set_scale(calibrationFactor);
+    }
+    else if (cell == 2)
+    {
+        hx711_2.set_scale(calibrationFactor);
+    }
     Serial.print("Reading: ");
-    String load_cell = String(this->get_units_kg(module) + offset, DEC_POINT);
+    String load_cell = String(this->get_units_g(cell) + offset, DEC_POINT);
     Serial.print(load_cell);
-    Serial.println(" kg");
+    Serial.println(" g");
+
     return load_cell.toFloat();
 }
 
@@ -60,91 +68,62 @@ long hx711Reader::FindZeroFactor(int cell)
         hx711_1.set_scale();
         hx711_1.tare();
         zero_factor = hx711_1.read_average(20);
+        Serial.print("Zero factor: ");
+        Serial.println(zero_factor);
+        return (zero_factor);
     }
     else if (cell == 2)
     {
         hx711_2.set_scale();
         hx711_2.tare();
         zero_factor = hx711_2.read_average(20);
+        long reading = hx711_2.get_units(10);
+        Serial.print("Zero factor: ");
+        Serial.println(zero_factor);
+        return (zero_factor);
     }
     Serial.print("Zero factor: ");
     Serial.println(zero_factor);
     return (zero_factor);
 }
 
-float hx711Reader::FindCalibrationFactor(int real_weight, int cell)
+float hx711Reader::FindCalibrationFactor(float real_weight, int cell)
 {
-    float calibrationFactor = 1;
+    float calibrationFactor;
     unsigned char flag_stable = 0;
     unsigned int decpoint = 1;
-    for (unsigned char i = 0; i < DEC_POINT + 1; i++)
+
+    float read_weight;
+    long r_weight;
+    long int_read_weight;
+    long x;
+    String data;
+
+    for (unsigned char i = 0; i < DEC_POINT; i++)
         decpoint = decpoint * 10;
 
-    while (1)
-    {
-        if (cell == 1)
-        {
-            hx711_1.set_scale(calibrationFactor); // Adjust to this calibration factor
-        }
-        else if (cell == 2)
-        {
-            hx711_2.set_scale(calibrationFactor); // Adjust to this calibration factor
-        }
+    float tare = this->get_units_g(cell);
+    calibrationFactor = tare / real_weight;
 
-        Serial.print("Reading: ");
-        float read_weight = this->get_units_kg(cell);
-        String data = String(read_weight, DEC_POINT);
-        Serial.print(data);
-        Serial.print(" kg");
-        Serial.print(" calibrationFactor: ");
-        Serial.print(calibrationFactor);
-        Serial.println();
-        long r_weight = (real_weight * decpoint);
-        long int_read_weight = read_weight * decpoint;
-        Serial.print(r_weight);
-        Serial.print(" , ");
-        Serial.println(int_read_weight);
-        long x;
-        if (r_weight == int_read_weight)
-        {
-            flag_stable++;
-            if (flag_stable >= STABLE)
-            {
-                Serial.print("Calibration Factor is = ");
-                Serial.println(calibrationFactor);
-                break;
-            }
-        }
-        if (r_weight > int_read_weight)
-        {
-            x = r_weight - int_read_weight;
-            if (x > 100)
-                calibrationFactor -= 1000;
-            else if (x > 100)
-                calibrationFactor -= 10;
-            else
-                calibrationFactor -= 1;
-            flag_stable = 0;
-        }
-        if (r_weight < int_read_weight)
-        {
-            x = int_read_weight - r_weight;
-            if (x > 100)
-                calibrationFactor += 1000;
-            else if (x > 10)
-                calibrationFactor += 10;
-            else
-                calibrationFactor += 1;
-            flag_stable = 0;
-        }
-    }
+    Serial.printf("Tare: %.3f\tReal Weight: %.3f\nCalibration Factor: %.3f\n", tare, real_weight, calibrationFactor);
+
     return calibrationFactor;
 }
 
-float hx711Reader::get_units_kg(int cell)
+float hx711Reader::get_units_g(int cell)
 {
     if (cell == 1)
-        return (hx711_1.get_units() * 0.453592);
+    {
+        if (hx711_1.is_ready())
+        {
+            return (hx711_1.get_units(20));
+        }
+    }
     else if (cell == 2)
-        return (hx711_2.get_units() * 0.453592);
+    {
+        if (hx711_1.is_ready())
+        {
+            return (hx711_2.get_units(20));
+        }
+    }
 }

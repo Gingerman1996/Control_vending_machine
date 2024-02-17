@@ -9,7 +9,7 @@ class hx711Reader
 {
 private:
 #define DEC_POINT 2
-#define STABLE 1
+#define STABLE 5
     static hx711Reader *instance; // Static instance variable
     HX711 hx711_1;                // HX711 sensor 1 instance
     HX711 hx711_2;                // HX711 sensor 2 instance
@@ -19,15 +19,15 @@ private:
     // Private constructor to prevent instantiation
     hx711Reader();
     void begin(int doutPin, int sckPin);
-    float get_units_kg(int cell);
+    float get_units_g(int cell);
 
 public:
-    static hx711Reader *getInstance();      // Get instance method
-    void setPins1(int doutPin, int sckPin); // Set pins module 1 method
-    void setPins2(int doutPin, int sckPin); // Set pins module 2 method
-    float readData(int module, long offset);             // Read data method
+    static hx711Reader *getInstance();                              // Get instance method
+    void setPins1(int doutPin, int sckPin);                         // Set pins module 1 method
+    void setPins2(int doutPin, int sckPin);                         // Set pins module 2 method
+    float readData(int cell, long offset, float calibrationFactor); // Read data method
     long FindZeroFactor(int cell);
-    float FindCalibrationFactor(int real_weight, int cell);
+    float FindCalibrationFactor(float real_weight, int cell);
 };
 
 #endif

@@ -34,6 +34,7 @@ private:
     MQTTManager();
     static MQTTManager *instance;
     PubSubClient *client;
+    char *_topic;
     const char *mqttServer;
     int mqttPort;
     const char *mqttUsername;

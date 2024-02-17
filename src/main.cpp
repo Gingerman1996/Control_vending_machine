@@ -2,11 +2,19 @@
 #include <EEPROM.h>
 #include "dataSender.h"
 #include "config.h"
+#include <HX711.h>
 #include "hx711Reader.h"
+
+#define LOAD_CELL_ACTIVE
 
 // Golbal valibation
 float zero_factor1;
 float zero_factor2;
+
+// time dulation
+unsigned long start;
+unsigned long end;
+unsigned long delta;
 
 // Function for mqtt process
 void mqttCallback(char *topic, byte *payload, unsigned int length);
@@ -56,6 +64,7 @@ void dataCallback(StaticJsonDocument<200> doc)
 
 void setup()
 {
+  start = micros();
   Serial.begin(BAUD_RATE);
   EEPROM.begin(EEPROM_SIZE);
 
@@ -91,18 +100,12 @@ void setup()
   NTPClientWrapper *ntpClient = NTPClientWrapper::getInstance();
   ntpClient->setup(NTP_SERVER, TIME_OFFSET); // Set NTP Server and Port
 
-// Initializ Loadcell
-#ifdef LOAD_CELL_ACTIVE
-  zero_factor1 = HX711Reader->FindZeroFactor(1);
-  zero_factor2 = HX711Reader->FindZeroFactor(2);
-#else
-  zero_factor1 = 400;
-  zero_factor2 = 400;
-#endif
-
   // Create task for mqttloop
   xTaskCreatePinnedToCore(mqttLoop, "MQTT_LOOP", 4096, NULL, 1, &MQTT_loop_task, 0);
-  // xTaskCreatePinnedToCore(NTPloop, "NTPloop", 2048, NULL, 1, &NTP_loop, 0);
+  xTaskCreatePinnedToCore(NTPloop, "NTPloop", 2048, NULL, 1, &NTP_loop, 0);
+  end = micros();
+  delta = end - start;
+  Serial.printf("Dulation Time for void setup: %.2f\n", float(delta) / 1000000.00);
 }
 
 void loop()
@@ -128,8 +131,8 @@ void NTPloop(void *parameter)
     ntpClient->update();
     String time = ntpClient->getFormattedTime();
     unsigned long time_long = ntpClient->getEpochTime();
-    Serial.printf("TIME: %s\n", time);
-    Serial.printf("EPOCH: %lu\n", time_long);
+    // Serial.printf("TIME: %s\n", time);
+    // Serial.printf("EPOCH: %lu\n", time_long);
     vTaskDelay(xDelay1000ms);
   }
 }
@@ -157,9 +160,12 @@ void handlePumpData(void *parameter)
     module_hx711 = 2;
   }
 
-  Serial.printf("Module: %d\n//////////////////////////\n", module_hx711);
+  Serial.printf("Cell: %d\n//////////////////////////\n", module_hx711);
 #ifdef LOAD_CELL_ACTIVE
-  hx711Reader::getInstance()->readData(module_hx711);
+  float calibration_factor;
+  EEPROM.get(20 + 0x20, calibration_factor);
+  Serial.printf("Calibration Factof: %.02f\n", calibration_factor);
+  hx711Reader::getInstance()->readData(module_hx711, 0, calibration_factor);
 #endif
   // Task finished, delete itself
   vTaskDelete(NULL);
@@ -186,6 +192,7 @@ void saveSwapData(void *parameter)
 // Function to handle calibration data
 void Calibration(void *parameter)
 {
+  start = micros();
   dataCal handleCal = *((dataCal *)parameter);
 
   float handelCalConstant;
@@ -213,16 +220,22 @@ void Calibration(void *parameter)
   }
   if (handleCal.cal_msg.toInt() == 9 || handleCal.cal_msg.toInt() == 10)
   {
-    containner[cell - 1] = handleCal.value;
+    // containner[cell - 1] = handleCal.value;
+    hx711Reader::getInstance()->FindZeroFactor((handleCal.cal_msg.toInt() % 9) + 1);
   }
-
+  else
+  {
 #ifdef LOAD_CELL_ACTIVE
-  handelCalConstant = hx711Reader::getInstance()->FindCalibrationFactor(handleCal.value + containner[cell - 1], cell);
-  EEPROM.put(handleCal.cal_msg.toInt() * 4 + 0x20, handelCalConstant);
-  EEPROM.commit();
+    handelCalConstant = hx711Reader::getInstance()->FindCalibrationFactor(handleCal.value, cell);
+    EEPROM.put(handleCal.cal_msg.toInt() * 4 + 0x20, handelCalConstant);
+    EEPROM.commit();
 #else
-  Serial.printf("Cal msg: %d\ncell: %d\nvalue: %.2f\n//////////////////////////\n", handleCal.cal_msg.toInt(), cell, handleCal.value);
+    Serial.printf("Cal msg: %d\ncell: %d\nvalue: %.2f\n//////////////////////////\n", handleCal.cal_msg.toInt(), cell, handleCal.value);
 #endif
+  }
   dataSender::getInstance()->sendCalData(cell, handleCal.cal_msg.toInt(), handleCal.value, 0);
+  end = micros();
+  delta = end - start;
+  Serial.printf("Dulation Time for cal function: %.2f ms\n", float(delta) / 1000.00);
   vTaskDelete(NULL);
 }

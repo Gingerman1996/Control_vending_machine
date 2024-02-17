@@ -73,6 +73,7 @@ void MQTTManager::connect()
         if (client->connect("ESP32Client", mqttUsername, mqttPassword, NULL, 2, NULL, NULL))
         {
             Serial.println("Connected!");
+            client->subscribe("esp32/fabric");
             return;
         }
         else
