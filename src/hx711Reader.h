@@ -28,6 +28,7 @@ public:
     float readData(int cell, long offset, float calibrationFactor); // Read data method
     long FindZeroFactor(int cell);
     float FindCalibrationFactor(float real_weight, int cell);
+    void setTare(int cell);
 };
 
 #endif

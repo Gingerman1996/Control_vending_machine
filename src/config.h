@@ -30,6 +30,21 @@
 #define LOADCELL_2_DOUT_PIN 19
 #define LOADCELL_2_SCK_PIN 21
 
+// Pump config
+#define RXD2 16
+#define TXD2 17
+
+#define Door_1 13
+#define Door_2 14
+
+#define Pump_1 26
+#define Pump_2 27
+#define Ready_pump 22
+
+#define Valve_1 32
+#define Valve_2 33
+
+// Task config
 const TickType_t xDelay100ms = pdMS_TO_TICKS(100);
 const TickType_t xDelay1000ms = pdMS_TO_TICKS(1000);
 
@@ -39,5 +54,7 @@ TaskHandle_t NTP_loop = NULL;
 TaskHandle_t pump_Task = NULL;
 TaskHandle_t swap_Task = NULL;
 TaskHandle_t cal_Task = NULL;
+TaskHandle_t Check_PumpStatus = NULL;
+TaskHandle_t pumping_task = NULL;
 
 #endif

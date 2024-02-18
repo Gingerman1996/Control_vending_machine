@@ -12,8 +12,8 @@ typedef void (*MQTTDataCallback)(StaticJsonDocument<200>);
 struct dataPump
 {
     String msg;
+    int cell;
     int value;
-    float cal_value;
     int door;
     int pump_pin;
     int valve_pin;

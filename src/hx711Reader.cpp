@@ -102,10 +102,10 @@ float hx711Reader::FindCalibrationFactor(float real_weight, int cell)
     for (unsigned char i = 0; i < DEC_POINT; i++)
         decpoint = decpoint * 10;
 
-    float tare = this->get_units_g(cell);
-    calibrationFactor = tare / real_weight;
+    float raw_weight = this->get_units_g(cell);
+    calibrationFactor = raw_weight / real_weight;
 
-    Serial.printf("Tare: %.3f\tReal Weight: %.3f\nCalibration Factor: %.3f\n", tare, real_weight, calibrationFactor);
+    Serial.printf("Tare: %.3f\tReal Weight: %.3f\nCalibration Factor: %.3f\n", raw_weight, real_weight, calibrationFactor);
 
     return calibrationFactor;
 }
@@ -126,4 +126,12 @@ float hx711Reader::get_units_g(int cell)
             return (hx711_2.get_units(20));
         }
     }
+}
+
+void hx711Reader::setTare(int cell)
+{
+    if (cell == 1)
+        hx711_1.tare();
+    else if (cell == 2)
+        hx711_2.tare();
 }

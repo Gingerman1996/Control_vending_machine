@@ -7,10 +7,6 @@
 
 #define LOAD_CELL_ACTIVE
 
-// Golbal valibation
-float zero_factor1;
-float zero_factor2;
-
 // time dulation
 unsigned long start;
 unsigned long end;
@@ -24,7 +20,11 @@ void mqttLoop(void *parameter);
 void NTPloop(void *parameter);
 
 // Function to handle pump data
-void handlePumpData(void *parameter);
+void getPumpReady(void *parameter);
+// Function to check pump status
+void CheckPumpStatus(void *parameter);
+// Function to pumping
+void pumpStart(void *parameter);
 // Function to handle swap data
 void saveSwapData(void *parameter);
 // Function to handle calibration data
@@ -41,7 +41,7 @@ void dataCallback(StaticJsonDocument<200> doc)
     handlepump->msg = doc["msg"].as<String>();  // กำหนดข้อมูล
     handlepump->value = doc["Value"].as<int>(); // กำหนดข้อมูล
     // Create task to work pump
-    xTaskCreatePinnedToCore(handlePumpData, "handlePumpData", 4096, (void *)handlepump, 1, &pump_Task, 0); // ส่ง pointer ไปยัง task
+    xTaskCreatePinnedToCore(getPumpReady, "handlePumpData", 4096, (void *)handlepump, 1, &pump_Task, 0); // ส่ง pointer ไปยัง task
   }
   else if (doc["msg"] == "Swap")
   {
@@ -66,7 +66,23 @@ void setup()
 {
   start = micros();
   Serial.begin(BAUD_RATE);
+  Serial2.begin(BAUD_RATE, SERIAL_8N1, RXD2, TXD2);
   EEPROM.begin(EEPROM_SIZE);
+
+  // Pin set
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(Door_1, INPUT_PULLUP);
+  pinMode(Door_2, INPUT_PULLUP);
+  pinMode(Pump_1, OUTPUT);
+  pinMode(Pump_2, OUTPUT);
+  pinMode(Ready_pump, INPUT_PULLUP);
+  pinMode(Valve_1, OUTPUT);
+  pinMode(Valve_2, OUTPUT);
+
+  analogWrite(Pump_1, 0);
+  analogWrite(Pump_2, 0);
+  digitalWrite(Valve_1, HIGH);
+  digitalWrite(Valve_2, HIGH);
 
   // Initialize WiFiManager
   myWiFiManager *wifiManager = myWiFiManager::getInstance();
@@ -144,31 +160,129 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
   MQTTDataParser::getInstance()->parseData(payload, length);
 }
 // Task pump work
-void handlePumpData(void *parameter)
+void getPumpReady(void *parameter)
 {
   // Retrieve the value passed from dataCallback
   dataPump handlePump = *((dataPump *)parameter);
 
   Serial.printf("msg: %s\nvalue: %d\n", handlePump.msg, handlePump.value);
-  int module_hx711;
   if (handlePump.msg == "pump1")
   {
-    module_hx711 = 1;
+    handlePump.cell = 1;
+    handlePump.door = Door_1;
+    handlePump.pump_pin = Pump_1;
+    handlePump.valve_pin = Valve_1;
   }
   else if (handlePump.msg == "pump2")
   {
-    module_hx711 = 2;
+    handlePump.cell = 2;
+    handlePump.door = Door_2;
+    handlePump.pump_pin = Pump_2;
+    handlePump.valve_pin = Valve_2;
   }
 
-  Serial.printf("Cell: %d\n//////////////////////////\n", module_hx711);
-#ifdef LOAD_CELL_ACTIVE
-  float calibration_factor;
-  EEPROM.get(20 + 0x20, calibration_factor);
-  Serial.printf("Calibration Factof: %.02f\n", calibration_factor);
-  hx711Reader::getInstance()->readData(module_hx711, 0, calibration_factor);
-#endif
+  xTaskCreatePinnedToCore(CheckPumpStatus, "CheckPumpStatus", 4096, reinterpret_cast<void*>(&handlePump), 1, &cal_Task, 0);
+
+  Serial.printf("Cell: %d\n//////////////////////////\n", handlePump.cell);
+  // #ifdef LOAD_CELL_ACTIVE
+  //   float calibration_factor;
+  //   EEPROM.get(20 + 0x20, calibration_factor);
+  //   Serial.printf("Calibration Factof: %.02f\n", calibration_factor);
+  //   hx711Reader::getInstance()->readData(handlePump.cell, 0, calibration_factor);
+  // #endif
   // Task finished, delete itself
   vTaskDelete(NULL);
+}
+
+void door_check(byte door)
+{
+  bool previousDoorStatus = digitalRead(door);
+
+  while (1)
+  {
+    // Read the status of the door
+    bool currentDoorStatus = digitalRead(door);
+
+    // Check if the door has changed from closed to open
+    if (!previousDoorStatus && currentDoorStatus)
+    {
+      // Wait until the door closes again
+      while (digitalRead(door))
+      {
+        vTaskDelay(xDelay100ms);
+      }
+      // Update the previous door status
+      previousDoorStatus = currentDoorStatus;
+      // Exit the while loop
+      break;
+    }
+    // Check if the door has changed from open to closed
+    else if (previousDoorStatus && !currentDoorStatus)
+    {
+      // Wait until the closes again
+      while (digitalRead(door))
+      {
+        vTaskDelay(xDelay100ms);
+      }
+      // Update the previous door status
+      previousDoorStatus = currentDoorStatus;
+      // Exit the while loop
+      break;
+    }
+    // If the door is closed, wait a short while before checking again
+    else if (!currentDoorStatus)
+    {
+      vTaskDelay(xDelay100ms);
+    }
+  }
+}
+
+int fluidAvailable(int fluidType, int value)
+{
+  float totalFluid = 0;
+  float EEPROM_get = 0;
+  for (int i = fluidType; i <= fluidType * 4; ++i)
+  {
+    EEPROM.get(i * 4, totalFluid);
+    totalFluid += EEPROM_get;
+    if (totalFluid >= value)
+    {
+      return i; // มีของเหลวพอที่จะปั้ม
+    }
+  }
+  return false; // ไม่มีของเหลวพอที่จะปั้ม
+}
+
+void CheckPumpStatus(void *parameter)
+{
+  dataPump handlePump = *((dataPump *)parameter);
+  bool door_status;
+
+  // Select boxs of fluid
+  int fluidType = (handlePump.cell, handlePump.value);
+  Serial2.println((handlePump.cell * 10) + fluidType - 1);
+
+  // Door status checking at begin
+  door_check(handlePump.door);
+  Serial2.println(201);
+
+  // Set zero for prepare pump
+  hx711Reader::getInstance()->setTare(handlePump.cell);
+
+  // Create task for pump
+  xTaskCreatePinnedToCore(pumpStart, "pumpStart", 4096, reinterpret_cast<void*>(&handlePump), 1, &pump_Task, 0);
+
+  // Check status during pumping
+  while(1)
+  {
+
+    vTaskDelay(xDelay100ms);
+  }
+}
+
+void pumpStart(void *parameter)
+{
+
 }
 
 // Function to handle swap data
@@ -220,7 +334,6 @@ void Calibration(void *parameter)
   }
   if (handleCal.cal_msg.toInt() == 9 || handleCal.cal_msg.toInt() == 10)
   {
-    // containner[cell - 1] = handleCal.value;
     hx711Reader::getInstance()->FindZeroFactor((handleCal.cal_msg.toInt() % 9) + 1);
   }
   else
