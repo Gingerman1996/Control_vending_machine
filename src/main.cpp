@@ -181,7 +181,7 @@ void getPumpReady(void *parameter)
     handlePump.valve_pin = Valve_2;
   }
 
-  xTaskCreatePinnedToCore(CheckPumpStatus, "CheckPumpStatus", 4096, reinterpret_cast<void*>(&handlePump), 1, &cal_Task, 0);
+  xTaskCreatePinnedToCore(CheckPumpStatus, "CheckPumpStatus", 4096, reinterpret_cast<void *>(&handlePump), 1, &cal_Task, 0);
 
   Serial.printf("Cell: %d\n//////////////////////////\n", handlePump.cell);
   // #ifdef LOAD_CELL_ACTIVE
@@ -270,10 +270,10 @@ void CheckPumpStatus(void *parameter)
   hx711Reader::getInstance()->setTare(handlePump.cell);
 
   // Create task for pump
-  xTaskCreatePinnedToCore(pumpStart, "pumpStart", 4096, reinterpret_cast<void*>(&handlePump), 1, &pump_Task, 0);
+  xTaskCreatePinnedToCore(pumpStart, "pumpStart", 4096, reinterpret_cast<void *>(&handlePump), 1, &pump_Task, 0);
 
   // Check status during pumping
-  while(1)
+  while (1)
   {
 
     vTaskDelay(xDelay100ms);
@@ -282,7 +282,6 @@ void CheckPumpStatus(void *parameter)
 
 void pumpStart(void *parameter)
 {
-
 }
 
 // Function to handle swap data
