@@ -1,0 +1,5 @@
+knolleary/PubSubClient@^2.8
+bogde/HX711@^0.7.5
+arduino-libraries/NTPClient@^3.2.1
+bblanchon/ArduinoJson@^7.0.3
+wnatth3/WiFiManager@^2.0.16-rc.2
