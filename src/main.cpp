@@ -237,6 +237,11 @@ void door_check(byte door)
   }
 }
 
+bool isDoorOpen(byte door)
+{
+  return digitalRead(door) == LOW; // ถ้าประตูเปิด จะมีค่า LOW แล้วคืนค่าเป็น true
+}
+
 int fluidAvailable(int fluidType, int value)
 {
   float totalFluid = 0;
@@ -273,11 +278,75 @@ void CheckPumpStatus(void *parameter)
   xTaskCreatePinnedToCore(pumpStart, "pumpStart", 4096, reinterpret_cast<void *>(&handlePump), 1, &pump_Task, 0);
 
   // Check status during pumping
+  unsigned long pumpStartTime = millis(); // เวลาที่เริ่มปั้ม
+  bool pumpStarted = false;               // ตัวแปรเก็บสถานะการเริ่มปั้ม
+  bool error = false;                     // ตัวแปรเก็บสถานะ error
+
   while (1)
   {
+    // อ่านสถานะ Ready_pump
+    bool readyPumpStatus = digitalRead(Ready_pump);
 
-    vTaskDelay(xDelay100ms);
+    if (!pumpStarted && readyPumpStatus == LOW)
+    {
+      // ถ้ายังไม่ได้เริ่มปั้มและ Ready_pump เป็น LOW แสดงว่าเริ่มปั้มได้
+      pumpStartTime = millis(); // เริ่มต้นเวลาการปั้ม
+      pumpStarted = true;       // เปลี่ยนสถานะเป็นเริ่มต้นการปั้มแล้ว
+    }
+
+    // ตรวจสอบว่ามีการไหลของของเหลวหรือไม่
+    int currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, 0);
+    if (!error && pumpStarted && millis() - pumpStartTime > 60000 && currentWeight < 5)
+    {
+      // ถ้ายังไม่มีการไหลของของเหลวลงมาภาชนะภายใน 1 นาทีหลังจากเริ่มปั้ม
+      // ให้ส่ง error และแสดงรหัส 200
+      Serial2.println(200);
+      error = true;
+    }
+
+    // ตรวจสอบสถานะของประตู
+    if (isDoorOpen(handlePump.door))
+    {
+      // ถ้าประตูเปิด ให้หยุดการปั้มทันที
+      vTaskSuspend(pump_Task);
+      // อ่านค่าน้ำหนักและส่ง serial2.println(201)
+      Serial2.println(201);
+    }
+
+    // หลังจากปิดประตู ตรวจสอบ error
+    if (!isDoorOpen(handlePump.door))
+    {
+      if (error)
+      {
+        // ถ้ามี error ให้ส่ง serial2.println(200)
+        Serial2.println(200);
+      }
+      else
+      {
+        // ไม่มี error ให้ตรวจสอบว่าน้ำหนักมีการลดลงเกิน 5 g หรือไม่
+        int previousWeight = currentWeight;
+        vTaskDelay(500); // รอเวลาสั้น ๆ ก่อนที่จะอ่านค่าน้ำหนักอีกครั้ง
+        int newWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, 0);
+        if (newWeight - previousWeight > 5)
+        {
+          // ถ้าน้ำหนักลดลงเกิน 5 g ให้เปลี่ยนสถานะเป็น error
+          error = true;
+          Serial2.println(200);
+        }
+      }
+    }
+
+    // ตรวจสอบสถานะ Ready_pump
+    if (readyPumpStatus == HIGH)
+    {
+      // ถ้าสถานะ Ready_pump เป็น HIGH แสดงว่าปั้มอยู่ในกระบวนการทำงาน
+      // ให้หยุดการปั้ม
+      vTaskSuspend(pump_Task);
+      // รอสักครู่ก่อนที่จะปั้มอีกครั้ง
+      vTaskDelay(1000);
+    }
   }
+  vTaskDelete(NULL);
 }
 
 void pumpStart(void *parameter)
