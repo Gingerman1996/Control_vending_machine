@@ -284,7 +284,7 @@ void CheckPumpStatus(void *parameter)
 
   while (1)
   {
-    // อ่านสถานะ Ready_pump
+    // Read status Ready_pump
     bool readyPumpStatus = digitalRead(Ready_pump);
 
     if (!pumpStarted && readyPumpStatus == LOW)
