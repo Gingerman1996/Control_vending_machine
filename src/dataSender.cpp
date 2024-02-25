@@ -43,7 +43,7 @@ void dataSender::sendSwapEEPROMData(int *numof_box)
     MQTTManager::getInstance()->publish(topic.c_str(), payload.c_str());
 }
 
-void dataSender::sendCalData(int topics, int cal_number,float Weight, float minus)
+void dataSender::sendCalData(int topics, int cal_number, float Weight, float minus)
 {
     StaticJsonDocument<200> doc_callback;
     String chipid_str = "458df8";
@@ -75,4 +75,31 @@ void dataSender::sendCalData(int topics, int cal_number,float Weight, float minu
     {
         MQTTManager::getInstance()->publish("esp32/fabric/minus_callback2", callback);
     }
+}
+
+void dataSender::sendFlagData(String flags)
+{
+  int code;
+
+  StaticJsonDocument<200> doc_callback;
+  // String chipid_str = String(chipId, HEX);
+  String chipid_str = "458df8";
+
+  doc_callback["msg"] = "flag";
+  doc_callback["EndNode"] = "0x" + chipid_str;
+
+  if (flags == "Start" || flags == "Stop" || flags == "Finished" || flags == "Error01" || flags == "Fixed01")
+  {
+    doc_callback["Status"] = flags;
+  }
+
+  String JsonOutput;
+  serializeJson(doc_callback, JsonOutput);
+  Serial.printf("%S: ", flags);
+  Serial.println(JsonOutput);
+
+  char callback[JsonOutput.length() + 1];
+  JsonOutput.toCharArray(callback, JsonOutput.length() + 1);
+  MQTTManager::getInstance()->publish("tablet/fabric", callback);
+  flags = "";
 }
