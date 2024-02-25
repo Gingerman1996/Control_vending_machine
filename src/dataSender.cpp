@@ -43,7 +43,7 @@ void dataSender::sendSwapEEPROMData(int *numof_box)
     MQTTManager::getInstance()->publish(topic.c_str(), payload.c_str());
 }
 
-void dataSender::sendCalData(int topics, int cal_number,float Weight, float minus)
+void dataSender::sendCalData(int topics, int cal_number, float Weight, float minus)
 {
     StaticJsonDocument<200> doc_callback;
     String chipid_str = "458df8";
@@ -75,4 +75,79 @@ void dataSender::sendCalData(int topics, int cal_number,float Weight, float minu
     {
         MQTTManager::getInstance()->publish("esp32/fabric/minus_callback2", callback);
     }
+}
+
+void dataSender::sendFlagData(String flags)
+{
+    int code;
+
+    StaticJsonDocument<200> doc_callback;
+    // String chipid_str = String(chipId, HEX);
+    String chipid_str = "458df8";
+
+    doc_callback["msg"] = "flag";
+    doc_callback["EndNode"] = "0x" + chipid_str;
+
+    if (flags == "Start" || flags == "Stop" || flags == "Finished" || flags == "Error01" || flags == "Fixed01")
+    {
+        doc_callback["Status"] = flags;
+    }
+
+    String JsonOutput;
+    serializeJson(doc_callback, JsonOutput);
+    Serial.printf("%S: ", flags);
+    Serial.println(JsonOutput);
+
+    char callback[JsonOutput.length() + 1];
+    JsonOutput.toCharArray(callback, JsonOutput.length() + 1);
+    MQTTManager::getInstance()->publish("tablet/fabric", callback);
+    flags = "";
+}
+
+void dataSender::sendPumpMessage(int msg_in, int pump_value, bool error, float liquidLevel[8])
+{
+    int code;
+
+    StaticJsonDocument<200> doc_callback;
+    String chipid_str = "458df8";
+
+    if (msg_in == 1)
+    {
+        doc_callback["msg"] = "pump1";
+    }
+    else if (msg_in == 2)
+    {
+        doc_callback["msg"] = "pump2";
+    } 
+    
+    doc_callback["EndNode"] = "0x" + chipid_str;
+
+    if (msg_in == 1 || msg_in == 2)
+    {
+        doc_callback["Value"] = String(pump_value);
+        if (!error)
+        {
+            doc_callback["Code"] = String(200);
+        }
+        else
+        {
+            doc_callback["Code"] = String(400);
+            error = false;
+        }
+        JsonArray box = doc_callback.createNestedArray("Box");
+        for (int i = 0; i < 8; i++)
+        {
+            box.add(String(liquidLevel[i]));
+        }
+    }
+
+    String JsonOutput;
+    serializeJson(doc_callback, JsonOutput);
+    Serial.printf("%S: ", msg_in);
+    Serial.println(JsonOutput);
+
+    char callback[JsonOutput.length() + 1];
+    JsonOutput.toCharArray(callback, JsonOutput.length() + 1);
+    MQTTManager::getInstance()->publish("esp32/fabric/callback", callback);
+    msg_in = 0;
 }

@@ -15,9 +15,12 @@ private:
     dataSender(); // Constructor
 
 public:
-    static dataSender *getInstance();                                        // Get instance method
+    static dataSender *getInstance();
+    // Get instance method
     void sendSwapEEPROMData(int *numof_box);                                 // Method to send EEPROM data to MQTT
     void sendCalData(int topics, int cal_number, float Weight, float minus); // Method to send cal data to MQTT
+    void sendFlagData(String flags);
+    void sendPumpMessage(int msg_in, int pump_value, bool error, float liquidLevel[8]);
 };
 
 #endif
