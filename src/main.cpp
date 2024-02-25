@@ -391,6 +391,7 @@ void CheckPumpStatus(void *parameter)
       {
         delay(100);
         pumpStop();
+        delay(500);
       }
       else if (handlePump.value - currentWeight < 30)
       {
@@ -437,6 +438,18 @@ void CheckPumpStatus(void *parameter)
         currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, calibrationFactor);
         Serial.printf("Final Weight: %.2f\n", currentWeight);
         dataSender::getInstance()->sendFlagData("Finished");
+        // ใส่ code สำหรับลบค่าปริมาณน้ำยาที่อยู่ในกล่อง แล้วส่งค่ากลับ Server
+        float boxValue;
+        EEPROM.get(fluidType * 4, boxValue);
+        boxValue = boxValue - currentWeight;
+        EEPROM.put(fluidType * 4, boxValue);
+        EEPROM.commit();
+        float liquidLevel[8];
+        for (int i = 0; i < 8; i++)
+        {
+          EEPROM.get((i + 1) * 4, liquidLevel[i]);
+        }
+        dataSender::getInstance()->sendPumpMessage(handlePump.cell, currentWeight, error, liquidLevel);
         Serial2.println(200);
         vTaskDelete(NULL);
       }
@@ -461,6 +474,18 @@ void CheckPumpStatus(void *parameter)
         Serial2.println(200);
         // ส่ง data ขึ้น MQTT
         dataSender::getInstance()->sendFlagData("Fixed01");
+        
+        float boxValue;
+        EEPROM.get(fluidType * 4, boxValue);
+        boxValue = boxValue - handlePump.value;
+        EEPROM.put(fluidType * 4, boxValue);
+        EEPROM.commit();
+        float liquidLevel[8];
+        for (int i = 0; i < 8; i++)
+        {
+          EEPROM.get((i + 1) * 4, liquidLevel[i]);
+        }
+        dataSender::getInstance()->sendPumpMessage(handlePump.cell, handlePump.value, error, liquidLevel);
         vTaskDelete(NULL);
       }
       else
