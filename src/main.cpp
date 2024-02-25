@@ -30,6 +30,8 @@ void pumpStop();
 void saveSwapData(void *parameter);
 // Function to handle calibration data
 void Calibration(void *parameter);
+// Fucntion to checking weight
+void IdelWeightCheck(void *parameter);
 
 // Callback function for handling data
 void dataCallback(StaticJsonDocument<200> doc)
@@ -117,9 +119,13 @@ void setup()
   NTPClientWrapper *ntpClient = NTPClientWrapper::getInstance();
   ntpClient->setup(NTP_SERVER, TIME_OFFSET); // Set NTP Server and Port
 
+  // hx711Reader::getInstance()->FindZeroFactor(1);
+  // hx711Reader::getInstance()->FindZeroFactor(2);
+
   // Create task for mqttloop
   xTaskCreatePinnedToCore(mqttLoop, "MQTT_LOOP", 4096, NULL, 1, &MQTT_loop_task, 0);
   xTaskCreatePinnedToCore(NTPloop, "NTPloop", 2048, NULL, 1, &NTP_loop, 0);
+  // xTaskCreatePinnedToCore(IdelWeightCheck, "IdelWeightCheck", 2014, NULL, 1, &IdelWeightCheck_task, 0);
   end = micros();
   delta = end - start;
   Serial.printf("Dulation Time for void setup: %.2f\n", float(delta) / 1000000.00);
@@ -136,6 +142,23 @@ void mqttLoop(void *parameter)
   {
     MQTTManager::getInstance()->loop();
     vTaskDelay(xDelay100ms);
+  }
+}
+
+// Checking Weight
+void IdelWeightCheck(void *parameter)
+{
+  while (1)
+  {
+    float calibrationFactor1;
+    float calibrationFactor2;
+    EEPROM.get(4 + 0x20, calibrationFactor1);
+    EEPROM.get(20 + 0x20, calibrationFactor2);
+    float weight1 = hx711Reader::getInstance()->readData(1, 0, calibrationFactor1);
+    float weight2 = hx711Reader::getInstance()->readData(2, 0, calibrationFactor2);
+    Serial.printf("Weight Cell 1: %.2f\n", weight1);
+    Serial.printf("Weight Cell 2: %.2f\n", weight2);
+    vTaskDelay(xDelay1000ms * 60);
   }
 }
 
@@ -247,7 +270,12 @@ int fluidAvailable(int fluidType, int value)
 {
   float totalFluid = 0;
   float EEPROM_get = 0;
-  for (int i = fluidType; i <= fluidType * 4; ++i)
+  int fluid_number = 0;
+  if (fluidType == 1)
+    fluid_number = 1;
+  else
+    fluid_number = 5;
+  for (int i = fluid_number; i <= fluid_number + 3; ++i)
   {
     EEPROM.get(i * 4, totalFluid);
     totalFluid += EEPROM_get;
@@ -263,14 +291,60 @@ void CheckPumpStatus(void *parameter)
 {
   dataPump handlePump = *((dataPump *)parameter);
   bool door_status;
+  float calibrationFactor;
+  if (handlePump.cell == 1)
+  {
+    switch (handlePump.value)
+    {
+    case 30:
+      EEPROM.get(4 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    case 60:
+      EEPROM.get(8 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    case 500:
+      EEPROM.get(12 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    case 1000:
+      EEPROM.get(16 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    }
+  }
+  else if (handlePump.cell == 2)
+  {
+    switch (handlePump.value)
+    {
+    case 30:
+      EEPROM.get(20 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    case 60:
+      EEPROM.get(24 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    case 500:
+      EEPROM.get(28 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    case 1000:
+      EEPROM.get(32 + 0x20, calibrationFactor);
+      Serial.printf("Calibration Factof: %.02f\n", calibrationFactor);
+      break;
+    }
+  }
 
   // Set zero for prepare pump
   hx711Reader::getInstance()->setTare(handlePump.cell);
-  
+
   // Select boxs of fluid
-  int fluidType = (handlePump.cell, handlePump.value);
+  int fluidType = fluidAvailable(handlePump.cell, handlePump.value);
   if (fluidType != false)
   {
+    Serial.printf("Send Serial2 data: %d\n", (handlePump.cell * 10) + fluidType - 1);
     Serial2.println((handlePump.cell * 10) + fluidType - 1);
   }
   else
@@ -280,12 +354,13 @@ void CheckPumpStatus(void *parameter)
   door_check(handlePump.door);
   Serial2.println(201);
 
-
   // Check status during pumping
-  float previousWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, 0); // เก็บค่าน้ำหนักก่อนหน้า
-  unsigned long previousTime = millis();                                              // เก็บเวลาก่อนปั้ม
+  float previousWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, calibrationFactor); // เก็บค่าน้ำหนักก่อนหน้า
+  unsigned long previousTime = millis();
+  unsigned long currentTime; // เก็บเวลาก่อนปั้ม
   bool sendStartMQTT = false;
   bool error = false;
+  Serial.printf("Previous Weight: %.2f\n", previousWeight);
 
   while (1)
   {
@@ -293,7 +368,7 @@ void CheckPumpStatus(void *parameter)
     bool readyPumpStatus = digitalRead(Ready_pump);
     bool doorClosed = digitalRead(handlePump.door);
 
-    if (!readyPumpStatus && !doorClosed)
+    if (!readyPumpStatus && !doorClosed && error == false)
     {
       // ถ้า Ready_pump ต่ำและประตูปิด แสดงว่าปั้มทำงาน
       // ตรวจสอบการไหลของของเหลว
@@ -303,13 +378,32 @@ void CheckPumpStatus(void *parameter)
         sendStartMQTT = true;
       }
 
-      float currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, 0);
+      float currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, calibrationFactor);
       Serial.printf("Current Weight: %.3f\n", currentWeight);
 
-      unsigned long currentTime = millis();
-      pumpStart(&handlePump, currentWeight); // start Pump
+      currentTime = millis();
+      Serial.printf("currentTime: %d\n", currentTime);
+      Serial.printf("Previous Time: %d\n", previousTime);
+      Serial.printf("Diff Time: %d\n", currentTime - previousTime);
 
-      if (currentWeight - previousWeight < 10 && currentTime - previousTime > 60000)
+      pumpStart(&handlePump, currentWeight); // start Pump
+      if (handlePump.value - currentWeight < 5)
+      {
+        delay(100);
+        pumpStop();
+      }
+      else if (handlePump.value - currentWeight < 30)
+      {
+        delay(500);
+        pumpStop();
+      }
+      else if (handlePump.value - currentWeight < 60)
+      {
+        delay(1000);
+        pumpStop();
+      }
+
+      if (currentWeight - previousWeight < 10 && currentTime - previousTime > 60000 && error == false)
       {
         // ถ้าไม่มีการไหลของของเหลวเกิน 10 g เกิน 1 นาที
         pumpStop();
@@ -318,7 +412,6 @@ void CheckPumpStatus(void *parameter)
         if (!digitalRead(Ready_pump))
         {
           Serial2.println(200);
-          sendStartMQTT = false;
         }
         else
         {
@@ -330,46 +423,54 @@ void CheckPumpStatus(void *parameter)
         dataSender::getInstance()->sendFlagData("Error01");
         error = true;
       }
-
-      // ตรวจสอบประตูว่ามีการเปิดหรือไม่
-      if (doorClosed)
+      else if (currentWeight - previousWeight > 10 && currentTime - previousTime > 60000)
       {
-        // ถ้ามีการเปิดประตู
-        // หยุดปั้มทันที
-        pumpStop();
-        Serial2.println(201);
-        // อ่านค่าน้ำหนัก
-        float currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, 0);
-        // ตรวจสอบ error หากมี
-        if (currentWeight >= 0 && currentWeight <= 5 && error == true)
-        {
-          // ถ้าค่าน้ำหนักอยู่ในช่วง 0 - 5 กิโลกรัม
-          Serial2.println(200);
-          // ส่ง data ขึ้น MQTT
-          dataSender::getInstance()->sendFlagData("Fixed01");
-        }
-        else
-        {
-          sendStartMQTT = false;
-          dataSender::getInstance()->sendFlagData("Stop");
-        }
+        previousWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, calibrationFactor);
+        previousTime = millis();
       }
 
       // Finish pump
-      if(currentWeight >= handlePump.value)
+      if (currentWeight >= handlePump.value)
       {
         pumpStop();
-        dataSender::getInstance()->sendFlagData("Finish");
-
-         vTaskDelete(NULL);
+        delay(5000);
+        currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, calibrationFactor);
+        Serial.printf("Final Weight: %.2f\n", currentWeight);
+        dataSender::getInstance()->sendFlagData("Finished");
+        Serial2.println(200);
+        vTaskDelete(NULL);
       }
       // อัพเดทค่าน้ำหนักและเวลาก่อนหน้า
-      previousWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, 0);
-      previousTime = millis();
-
-      // รอสักครู่ก่อนที่จะทำการวน loop ต่อ
-      vTaskDelay(xDelay100ms);
+      // previousWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, calibrationFactor);
+      // previousTime = millis();
     }
+    // ตรวจสอบประตูว่ามีการเปิดหรือไม่
+    if (doorClosed)
+    {
+      // ถ้ามีการเปิดประตู
+      // หยุดปั้มทันที
+      pumpStop();
+      Serial.println("Stop");
+      Serial2.println(201);
+      // อ่านค่าน้ำหนัก
+      float currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0, calibrationFactor);
+      // ตรวจสอบ error หากมี
+      if (currentWeight <= 5 && error == true)
+      {
+        // ถ้าค่าน้ำหนักอยู่ในช่วง 0 - 5 กิโลกรัม
+        Serial2.println(200);
+        // ส่ง data ขึ้น MQTT
+        dataSender::getInstance()->sendFlagData("Fixed01");
+        vTaskDelete(NULL);
+      }
+      else
+      {
+        sendStartMQTT = false;
+        dataSender::getInstance()->sendFlagData("Stop");
+      }
+    }
+    // รอสักครู่ก่อนที่จะทำการวน loop ต่อ
+    vTaskDelay(xDelay100ms);
   }
 }
 
@@ -377,6 +478,7 @@ void pumpStart(dataPump *handlepump, float currentWeight)
 {
   if (handlepump->cell == 1)
   {
+    digitalWrite(Valve_1, LOW);
     if (handlepump->value <= 30)
     {
       analogWrite(handlepump->pump_pin, 80);
@@ -392,6 +494,7 @@ void pumpStart(dataPump *handlepump, float currentWeight)
   }
   else if (handlepump->value == 2)
   {
+    digitalWrite(Valve_2, LOW);
     if (handlepump->value <= 30)
     {
       analogWrite(handlepump->pump_pin, 50);
@@ -472,6 +575,7 @@ void Calibration(void *parameter)
     handelCalConstant = hx711Reader::getInstance()->FindCalibrationFactor(handleCal.value, cell);
     EEPROM.put(handleCal.cal_msg.toInt() * 4 + 0x20, handelCalConstant);
     EEPROM.commit();
+    Serial.printf("Set cal @: %d\tCalibrationFactor: %.2f\n", handleCal.cal_msg.toInt() * 4 + 0x20, handelCalConstant);
 #else
     Serial.printf("Cal msg: %d\ncell: %d\nvalue: %.2f\n//////////////////////////\n", handleCal.cal_msg.toInt(), cell, handleCal.value);
 #endif
