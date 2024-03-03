@@ -20,7 +20,7 @@ public:
     void sendSwapEEPROMData(int *numof_box);                                 // Method to send EEPROM data to MQTT
     void sendCalData(int topics, int cal_number, float Weight, float minus); // Method to send cal data to MQTT
     void sendFlagData(String flags);
-    void sendPumpMessage(int msg_in, int pump_value, bool error, float liquidLevel[8]);
+    void sendPumpMessage(int msg_in, float pump_value, bool error, float liquidLevel[8]);
 };
 
 #endif

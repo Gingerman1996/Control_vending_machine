@@ -66,7 +66,6 @@ void dataCallback(StaticJsonDocument<200> doc) {
                             1, &drainFluid_task, 0);
   } else if (doc["msg"] == "stopDrain") {
     pumpStop();
-    Serial2.println(200);
     vTaskDelete(drainFluid_task);
   } else if (doc["msg"] == "Swap") {
     dataSwap *handleSwap = new dataSwap;
@@ -101,12 +100,17 @@ void setup() {
   pinMode(Ready_pump, INPUT_PULLUP);
   pinMode(Valve_1, OUTPUT);
   pinMode(Valve_2, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
 
   analogWrite(Pump_1, 0);
   analogWrite(Pump_2, 0);
   digitalWrite(Valve_1, HIGH);
   digitalWrite(Valve_2, HIGH);
 
+  // Serial2.println(13);
+  // delay(1000);
+  // Serial2.println(200);
+  // delay(500);
   // Initialize WiFiManager
   myWiFiManager *wifiManager = myWiFiManager::getInstance();
   wifiManager->connect();
@@ -351,10 +355,6 @@ void CheckPumpStatus(void *parameter) {
         break;
     }
   }
-
-  // Set zero for prepare pump
-  hx711Reader::getInstance()->setTare(handlePump.cell);
-
   // Select boxs of fluid
   int fluidType = fluidAvailable(handlePump.cell, handlePump.value);
   if (fluidType != false) {
@@ -367,6 +367,8 @@ void CheckPumpStatus(void *parameter) {
   // Door status checking at begin
   door_check(handlePump.door);
   Serial2.println(201);
+  // Set zero for prepare pump
+  hx711Reader::getInstance()->setTare(handlePump.cell);
 
   // Check status during pumping
   float previousWeight = hx711Reader::getInstance()->readData(
@@ -375,6 +377,7 @@ void CheckPumpStatus(void *parameter) {
   unsigned long currentTime;  // เก็บเวลาก่อนปั้ม
   bool sendStartMQTT = false;
   bool error = false;
+  bool stopFlag = false;
   Serial.printf("Previous Weight: %.2f\n", previousWeight);
 
   while (1) {
@@ -385,6 +388,7 @@ void CheckPumpStatus(void *parameter) {
     if (!readyPumpStatus && !doorClosed && error == false) {
       // ถ้า Ready_pump ต่ำและประตูปิด แสดงว่าปั้มทำงาน
       // ตรวจสอบการไหลของของเหลว
+      stopFlag = false;
       if (!sendStartMQTT) {
         dataSender::getInstance()->sendFlagData("Start");
         sendStartMQTT = true;
@@ -401,7 +405,7 @@ void CheckPumpStatus(void *parameter) {
 
       pumpStart(&handlePump, currentWeight);  // start Pump
       if (handlePump.value - currentWeight < 5) {
-        delay(100);
+        delay(50);
         pumpStop();
         delay(500);
       } else if (handlePump.value - currentWeight < 30) {
@@ -441,23 +445,27 @@ void CheckPumpStatus(void *parameter) {
       // ปั้มเสร็จแล้ว วัดจากน้ำหนักปัจจุบันกับน้ำหนักที่สั่ง
       if (currentWeight >= handlePump.value) {
         pumpStop();
-        delay(5000);
+        vTaskDelay(xDelay1000ms * 5);
         currentWeight = hx711Reader::getInstance()->readData(handlePump.cell, 0,
                                                              calibrationFactor);
         Serial.printf("Final Weight: %.2f\n", currentWeight);
         dataSender::getInstance()->sendFlagData("Finished");
         // ใส่ code สำหรับลบค่าปริมาณน้ำยาที่อยู่ในกล่อง แล้วส่งค่ากลับ Server
         float boxValue;
+        float boxValue_after;
         EEPROM.get(fluidType * 4, boxValue);
-        boxValue = boxValue - currentWeight;
-        EEPROM.put(fluidType * 4, boxValue);
+        boxValue_after = boxValue - currentWeight;
+        Serial.printf("Box value after pump: %.2f\n", boxValue_after);
+        EEPROM.put(fluidType * 4, boxValue_after);
         EEPROM.commit();
         float liquidLevel[8];
         for (int i = 0; i < 8; i++) {
           EEPROM.get((i + 1) * 4, liquidLevel[i]);
+          vTaskDelay(xDelay100ms);
         }
         dataSender::getInstance()->sendPumpMessage(
             handlePump.cell, currentWeight, error, liquidLevel);
+
         Serial2.println(200);
         vTaskDelete(NULL);
       }
@@ -478,6 +486,7 @@ void CheckPumpStatus(void *parameter) {
         Serial2.println(200);
         // ส่ง data ขึ้น MQTT
         dataSender::getInstance()->sendFlagData("Fixed01");
+        vTaskDelay(xDelay100ms);
         float boxValue;
         EEPROM.get(fluidType * 4, boxValue);
         boxValue = boxValue - handlePump.value;
@@ -495,6 +504,10 @@ void CheckPumpStatus(void *parameter) {
         dataSender::getInstance()->sendFlagData("Stop");
       }
     }
+    if (readyPumpStatus && sendStartMQTT == true) {
+      dataSender::getInstance()->sendFlagData("Stop");
+      sendStartMQTT = false;
+    }
     // รอสักครู่ก่อนที่จะทำการวน loop ต่อ
     vTaskDelay(xDelay100ms);
   }
@@ -504,24 +517,24 @@ void pumpStart(dataPump *handlepump, float currentWeight) {
   if (handlepump->cell == 1) {
     digitalWrite(Valve_1, LOW);
     if (handlepump->value <= 30) {
-      analogWrite(handlepump->pump_pin, 80);
+      analogWrite(handlepump->pump_pin, 120);
     } else if (handlepump->value > 30 &&
                currentWeight < handlepump->value - 30) {
-      analogWrite(handlepump->pump_pin, 150);
+      analogWrite(handlepump->pump_pin, 200);
     } else if (handlepump->value > 30 &&
                currentWeight > handlepump->value - 30) {
-      analogWrite(handlepump->pump_pin, 80);
+      analogWrite(handlepump->pump_pin, 120);
     }
   } else if (handlepump->value == 2) {
     digitalWrite(Valve_2, LOW);
     if (handlepump->value <= 30) {
-      analogWrite(handlepump->pump_pin, 50);
+      analogWrite(handlepump->pump_pin, 100);
     } else if (handlepump->value > 30 &&
                currentWeight < handlepump->value - 30) {
-      analogWrite(handlepump->pump_pin, 90);
+      analogWrite(handlepump->pump_pin, 200);
     } else if (handlepump->value > 30 &&
                currentWeight > handlepump->value - 30) {
-      analogWrite(handlepump->pump_pin, 50);
+      analogWrite(handlepump->pump_pin, 100);
     }
   }
 }
