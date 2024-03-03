@@ -130,6 +130,7 @@
  C:/Users/ForMyLife/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/spi_flash/include/esp_spi_flash_counters.h \
  C:/Users/ForMyLife/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/ForMyLife/.platformio/packages/framework-arduinoespressif32/libraries/EEPROM/src/EEPROM.h \
+ .pio/libdeps/esp32doit-devkit-v1/HX711/src/HX711.h src/config.h \
  src/dataSender.h src/model.h \
  .pio/libdeps/esp32doit-devkit-v1/WiFiManager/WiFiManager.h \
  C:/Users/ForMyLife/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFi.h \
@@ -215,5 +216,4 @@
  .pio/libdeps/esp32doit-devkit-v1/ArduinoJson/src/ArduinoJson.h \
  .pio/libdeps/esp32doit-devkit-v1/ArduinoJson/src/ArduinoJson.hpp \
  .pio/libdeps/esp32doit-devkit-v1/ArduinoJson/src/ArduinoJson/Configuration.hpp \
- src/config.h .pio/libdeps/esp32doit-devkit-v1/HX711/src/HX711.h \
  src/hx711Reader.h
