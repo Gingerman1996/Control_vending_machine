@@ -57,5 +57,6 @@ TaskHandle_t cal_Task = NULL;
 TaskHandle_t Check_PumpStatus = NULL;
 TaskHandle_t pumping_task = NULL;
 TaskHandle_t IdelWeightCheck_task = NULL;
+TaskHandle_t drainFluid_task = NULL;
 
 #endif
